@@ -1,0 +1,40 @@
+name: Update service
+
+on:
+  push:
+    branches:
+      -master
+
+jobs:
+  build_push_image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Build image
+        run: docker build . --file Dockerfile --tag suput/python-backend
+
+      - name: Log in to registry
+        run: echo "${{ secrets.DOCKER_HUB_PASSWORD }}" | docker login -u suput --password-stdin
+
+      - name: Push image
+        run: |
+          docker tag suput/python-backend suput/python-backend:latest
+          docker tag suput/python-backend suput/python-backend:${{ github.run_number }}
+          docker push suput/python-backend:latest
+          docker push suput/python-backend:${{ github.run_number }}
+  update_service:
+    needs: [build_push_image]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update service on remote Host
+        uses: appleboy/ssh-action@master
+        env:
+          IMAGE: uput/python-backend:${{ github.run_number }}
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME_FROM_HOST }}
+          password: ${{ secrets.PASSWORD_FROM_HOST }}
+          envs: IMAGE
+          script: docker service update --image $IMAGE python_backend
